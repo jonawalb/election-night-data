@@ -11,7 +11,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
     now=$(date +%s)
     if [ "$sig" != "$last_sig" ] || [ $((now - last_push)) -ge 600 ]; then
       mv luria.next.json luria.json
-      git add luria.json && git commit -q -m "chore(data): snapshot $(date -u +%H:%M)" && git push -q >> relay.log 2>&1 && last_push=$now && last_sig=$sig
+      git add luria.json && git commit -q -m "chore(data): snapshot $(date -u +%H:%M)"; git pull -q --rebase -X theirs >> relay.log 2>&1; git push -q >> relay.log 2>&1 && last_push=$now && last_sig=$sig
       echo "$(date -u +%H:%M:%S) pushed" >> relay.log
     fi
     python3 -c "import json,sys;sys.exit(0 if json.load(open('luria.json')).get('official') else 1)" && { echo "official, stopping" >> relay.log; break; }

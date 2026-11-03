@@ -7,7 +7,7 @@ last_sig=""; last_push=0; fails=0
 while [ "$(date +%s)" -lt "$END" ]; do
   if python3 relay.py luria.next.json >> relay.log 2>&1; then
     fails=0
-    sig=$(python3 -c "import json;d=json.load(open('luria.next.json'));d.pop('relayedAt');print(hash(json.dumps(d,sort_keys=True)))")
+    sig=$(python3 -c "import json;d=json.load(open('luria.next.json'));d.pop('relayedAt');import hashlib;print(hashlib.md5(json.dumps(d,sort_keys=True).encode()).hexdigest())")
     now=$(date +%s)
     if [ "$sig" != "$last_sig" ] || [ $((now - last_push)) -ge 600 ]; then
       mv luria.next.json luria.json

@@ -8,6 +8,39 @@ from datetime import datetime, timezone
 
 BASE = "https://www.nbcnews.com/firecracker/api/v2/national-results/2026-elections/"
 PARTIES = ("dem", "rep", "ind")
+STATES = {"Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA", "Colorado": "CO",
+          "Connecticut": "CT", "Delaware": "DE", "Florida": "FL", "Georgia": "GA", "Hawaii": "HI", "Idaho": "ID",
+          "Illinois": "IL", "Indiana": "IN", "Iowa": "IA", "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA",
+          "Maine": "ME", "Maryland": "MD", "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN",
+          "Mississippi": "MS", "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
+          "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY", "North Carolina": "NC",
+          "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK", "Oregon": "OR", "Pennsylvania": "PA",
+          "Rhode Island": "RI", "South Carolina": "SC", "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX",
+          "Utah": "UT", "Vermont": "VT", "Virginia": "VA", "Washington": "WA", "West Virginia": "WV",
+          "Wisconsin": "WI", "Wyoming": "WY"}
+
+
+def cands(tooltip, n=3):
+    """Top candidates by vote: [name, party, pct, votes, winner, incumbent]."""
+    cs = sorted(tooltip.get("candidates") or [], key=lambda c: -(c.get("votes") or 0))[:n]
+    return [[c.get("name", ""), (c.get("party") or "").lower()[:3], c.get("percentVote") or 0, c.get("votes") or 0,
+             1 if c.get("isWinner") else 0, 1 if c.get("isIncumbent") else 0] for c in cs]
+
+
+def house_races(d):
+    out = []
+    for key, v in (d.get("mapData") or {}).items():
+        t = (v or {}).get("tooltip") if isinstance(v, dict) else None
+        if not t or not t.get("candidates"):
+            continue
+        name = t.get("raceName", "")
+        state, _, dist = name.partition(" District ")
+        if not dist:
+            state, dist = name.replace(" At Large", ""), "AL"
+        out.append({"st": STATES.get(state, state[:2].upper()), "d": dist, "pctIn": t.get("percentIn") or 0,
+                    "rem": t.get("remainingVote"), "call": t.get("callStatusCode") or "", "cl": cands(t)})
+    out.sort(key=lambda r: (r["st"], int(r["d"]) if r["d"].isdigit() else 0))
+    return out
 
 
 def get(slug):
@@ -17,7 +50,8 @@ def get(slug):
 
 
 def statewide(d):
-    """Races from a statewide table (Senate, governor): winner, flip flag, leader."""
+    """Races from a statewide table (Senate, governor): winner, flip flag, leader, vote detail."""
+    mp = d.get("mapData") or {}
     races = []
     for s in d["tableData"]["states"]:
         row = {"st": s["stateAbbr"], "name": s["stateName"], "pctIn": s.get("percentIn") or 0, "c": {}}
@@ -28,6 +62,10 @@ def statewide(d):
             if c.get("isWinner"):
                 row["win"] = p
                 row["flip"] = bool(c.get("isFlip"))
+        t = (mp.get(s["stateAbbr"].replace(" Special", "")) or {}).get("tooltip") or {}
+        if t.get("candidates"):
+            row["cl"] = cands(t)
+            row["rem"] = t.get("remainingVote")
         races.append(row)
     return races
 
@@ -79,6 +117,8 @@ def main(out):
             "uncalled": seats.get("uncalled"),
             "model": {k: model.get(k) for k in ("dem", "rep")} if model else None,
             "keyFlips": key_flips(house),
+            "characterization": model.get("characterization") if model else None,
+            "races": house_races(house),
             "states": [{"st": s["stateAbbr"], "d": s["dem"]["seatsWon"], "r": s["rep"]["seatsWon"],
                         "u": s.get("uncalledRaces", 0), "t": s.get("totalSeats", 0)}
                        for s in house["tableData"]["states"]],
